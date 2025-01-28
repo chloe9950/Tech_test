@@ -1,12 +1,20 @@
 import great_expectations as gx
+import argparse
 
+# Parse command-line arguments
+parser = argparse.ArgumentParser(description="Run Great Expectations validation.")
+parser.add_argument("--username", type=str, required=True, help="Database username")
+parser.add_argument("--password", type=str, required=True, help="Database password")
+parser.add_argument("--host", type=str, required=True, help="Database host")
+parser.add_argument("--port", type=int, required=True, help="Database port")
+parser.add_argument("--database", type=str, required=True, help="Database name")
+args = parser.parse_args()
+
+# Construct the database connection string
+PG_CONNECTION_STRING = f"postgresql+psycopg2://{args.username}:{args.password}@{args.host}:{args.port}/{args.database}"
+
+# Initialize Great Expectations context
 context = gx.get_context()
-
-# Define database connection
-PG_CONNECTION_STRING = (
-    "postgresql+psycopg2://candidate:NW337AkNQH76veGc@"
-    "technical-test-1.cncti7m4kr9f.ap-south-1.rds.amazonaws.com:5432/technical_test"
-)
 
 pg_datasource = context.sources.add_postgres(
     name="pg_datasource", 
@@ -58,7 +66,6 @@ users_validator.expect_column_values_to_be_in_set(
 
 users_server_hashes = users_validator.head(fetch_all=True)["server_hash"].drop_duplicates().tolist()
 users_login_hashes = users_validator.head(fetch_all=True)["login_hash"].drop_duplicates().tolist()
-
 
 users_validator.save_expectation_suite(discard_failed_expectations=False)
 
@@ -112,7 +119,7 @@ trades_validator.expect_column_values_to_match_regex(
     regex=r"^[A-F0-9]+$"
 )
 
-# todo: Validate for every row open_time < close_time 
+# Validate for every row open_time < close_time 
 trades_validator.expect_column_pair_values_a_to_be_greater_than_b(
     column_A="close_time",
     column_B="open_time"
@@ -127,7 +134,6 @@ trades_validator.expect_column_values_to_be_in_set(
     column="login_hash", 
     value_set=users_login_hashes
 )
-
 
 trades_validator.save_expectation_suite(discard_failed_expectations=False)
 
@@ -172,20 +178,3 @@ users_checkpoint_result = users_checkpoint.run()
 trades_checkpoint_result = trades_checkpoint.run()
 
 context.open_data_docs()
-
-
-"""
-Data Quality Issue:
-=====================
-
-Data Integrity Issues:
-    - One server_hash in the trades table does not match any server_hash in the users table.
-    - There are 91953 server_hash entries(contains duplicates) in the trades table that do not have a match in the users table.
-
-Null Values:
-    - There are 7 rows in the trades table where the contractsize column is null.
-
-Invalid Data:
-    - One symbol, USD,CHF, is invalid as it does not meet the expected alphanumeric format.
-    - There are 36 rows where close_time is earlier than open_time.
-"""
